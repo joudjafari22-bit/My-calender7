@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Calendar</title>
+
+<style>
+body{
+  font-family: system-ui,-apple-system,sans-serif;
+  background:#eef1f5;
+  margin:0;
+  padding:12px;
+}
+header{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:15px;
+}
+input,button,select{
+  padding:8px;
+  font-size:14px;
+}
+.month{
+  margin-bottom:30px;
+}
+.month-title{
+  font-size:18px;
+  font-weight:bold;
+  margin-bottom:8px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:6px;
+}
+.day-name{
+  text-align:center;
+  font-weight:bold;
+  font-size:13px;
+}
+.day{
+  background:#fff;
+  border-radius:12px;
+  height:75px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  cursor:pointer;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+.day.checked{
+  text-decoration:line-through;
+  opacity:.4;
+}
+.day.special{
+  border:3px solid red;
+}
+.today{
+  outline:3px solid #007aff;
+}
+.modal{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,.45);
+}
+.modal-box{
+  background:#fff;
+  padding:16px;
+  border-radius:14px;
+  width:220px;
+  text-align:center;
+}
+.modal-box button{
+  width:100%;
+  margin-top:8px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <input id="calendarName" placeholder="اسم المهمة / Task name">
+  <button onclick="addCalendar()">➕ Add</button>
+
+  <select onchange="switchLang(this.value)">
+    <option value="ar">العربية</option>
+    <option value="en">English</option>
+  </select>
+</header>
+
+<div id="calendars"></div>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <button onclick="markChecked()">✔️ Mark done</button>
+    <button onclick="markSpecial()">🔴 Mark special</button>
+    <button onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
+<script>
+// ---------- Language ----------
+let lang = localStorage.getItem("lang") || "ar";
+
+const t = {
+  ar:{
+    dir:"rtl",
+    add:"➕ إضافة",
+    placeholder:"اسم المهمة / التقويم",
+    done:"✔️ شطب اليوم",
+    special:"🔴 تمييز اليوم",
+    cancel:"إلغاء",
+    days:["أحد","إثن","ثلا","أرب","خم","جم","سب"],
+    months:["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"]
+  },
+  en:{
+    dir:"ltr",
+    add:"➕ Add",
+    placeholder:"Task / Calendar name",
+    done:"✔️ Mark done",
+    special:"🔴 Mark special",
+    cancel:"Cancel",
+    days:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
+    months:["January","February","March","April","May","June","July","August","September","October","November","December"]
+  }
+};
+
+function switchLang(l){
+  lang = l;
+  localStorage.setItem("lang",l);
+  renderAll();
+}
+
+// ---------- Calendars ----------
+let calendars = JSON.parse(localStorage.getItem("calendars")) || [];
+
+function addCalendar(){
+  const name = calendarName.value.trim();
+  if(!name) return;
+  calendars.push({ name, days:{} });
+  save(); renderAll();
+  calendarName.value="";
+}
+
+function save(){
+  localStorage.setItem("calendars", JSON.stringify(calendars));
+}
+
+// ---------- Hijri ----------
+function hijri(date){
+  return new Intl.DateTimeFormat(
+    lang === "ar" ? "ar-TN-u-ca-islamic" : "en-TN-u-ca-islamic",
+    { day:"numeric", month:"numeric" }
+  ).format(date);
+}
+
+// ---------- Modal ----------
+let currentCal,currentDate;
+
+function openModal(c,d){
+  currentCal=c; currentDate=d;
+  modal.style.display="flex";
+}
+function closeModal(){ modal.style.display="none"; }
+
+function markChecked(){
+  const day = calendars[currentCal].days[currentDate] ||= {};
+  day.checked = !day.checked;
+  save(); closeModal(); renderAll();
+}
+function markSpecial(){
+  const day = calendars[currentCal].days[currentDate] ||= {};
+  day.special = !day.special;
+  save(); closeModal(); renderAll();
+}
+
+// ---------- Render ----------
+function renderAll(){
+  document.body.dir = t[lang].dir;
+
+  calendarName.placeholder = t[lang].placeholder;
+  document.querySelector("header button").innerText = t[lang].add;
+
+  modal.querySelectorAll("button")[0].innerText = t[lang].done;
+  modal.querySelectorAll("button")[1].innerText = t[lang].special;
+  modal.querySelectorAll("button")[2].innerText = t[lang].cancel;
+
+  calendarsDiv.innerHTML="";
+  const year = new Date().getFullYear();
+
+  calendars.forEach((cal,cIndex)=>{
+    for(let m=0;m<12;m++){
+      const month=document.createElement("div");
+      month.className="month";
+      month.innerHTML=`<div class="month-title">${cal.name} – ${t[lang].months[m]} ${year}</div>`;
+
+      const grid=document.createElement("div");
+      grid.className="grid";
+
+      t[lang].days.forEach(d=>{
+        const dn=document.createElement("div");
+        dn.className="day-name";
+        dn.innerText=d;
+        grid.appendChild(dn);
+      });
+
+      const first=new Date(year,m,1);
+      for(let i=0;i<first.getDay();i++) grid.appendChild(document.createElement("div"));
+
+      const last=new Date(year,m+1,0).getDate();
+      for(let d=1;d<=last;d++){
+        const date=new Date(year,m,d);
+        const key=date.toISOString().split("T")[0];
+
+        const cell=document.createElement("div");
+        cell.className="day";
+        cell.innerHTML=`<div>${d}</div><div>${hijri(date)}</div>`;
+
+        const state=cal.days[key];
+        if(state?.checked) cell.classList.add("checked");
+        if(state?.special) cell.classList.add("special");
+
+        if(key===new Date().toISOString().split("T")[0]) cell.classList.add("today");
+
+        cell.onclick=()=>openModal(cIndex,key);
+        grid.appendChild(cell);
+      }
+
+      month.appendChild(grid);
+      calendarsDiv.appendChild(month);
+    }
+  });
+}
+
+const calendarsDiv=document.getElementById("calendars");
+const modal=document.getElementById("modal");
+
+renderAll();
+</script>
+
+</body>
+</html>
